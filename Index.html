@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Video Trimmer mit Vollbild</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Einfache, responsive Gestaltung */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      color: #333;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .file-input {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    input[type="file"] {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .video-container {
+      text-align: center;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    video {
+      width: 100%;
+      max-height: 360px;
+      background: #000;
+      outline: none;
+    }
+    #fullscreenBtn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #666;
+      color: #fff;
+    }
+    #fullscreenBtn:hover {
+      background-color: #555;
+    }
+    .sliders {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 20px;
+    }
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: #ddd;
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      background: #666;
+      border: 2px solid #fff;
+      box-shadow: 0 0 2px rgba(0,0,0,0.5);
+    }
+    .time-display {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      color: #333;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Video Trimmer mit Vollbild</h1>
+
+    <!-- Dateiupload-Feld -->
+    <div class="file-input">
+      <input 
+        id="videoFile" 
+        type="file" 
+        accept="video/*"
+        title="Videodatei auswählen" 
+      />
+    </div>
+
+    <!-- Videoplayer -->
+    <div class="video-container">
+      <!-- Wichtig: playsinline + webkit-playsinline für Mobile -->
+      <video id="video" controls playsinline webkit-playsinline></video>
+      <!-- Eigener Button, um Fullscreen anzustoßen -->
+      <button id="fullscreenBtn">Vollbild an/aus</button>
+    </div>
+
+    <!-- Slider-Bereich -->
+    <div class="sliders">
+      <!-- Slider für Startzeit -->
+      <div class="slider-row">
+        <div class="slider-labels">
+          <span>Startzeit</span>
+          <span id="startTimeLabel">0:00</span>
+        </div>
+        <input 
+          type="range" 
+          id="startRange" 
+          min="0" 
+          step="0.1" 
+          value="0" 
+        />
+      </div>
+      
+      <!-- Slider für Endzeit -->
+      <div class="slider-row">
+        <div class="slider-labels">
+          <span>Endzeit</span>
+          <span id="endTimeLabel">0:00</span>
+        </div>
+        <input 
+          type="range" 
+          id="endRange" 
+          min="0" 
+          step="0.1" 
+          value="0" 
+        />
+      </div>
+    </div>
+
+    <!-- Angezeigter Bereich -->
+    <div class="time-display">
+      <span>Gewählter Abschnitt:</span>
+      <span id="chosenRange">0:00 – 0:00</span>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("videoFile");
+    const video = document.getElementById("video");
+    const startRange = document.getElementById("startRange");
+    const endRange = document.getElementById("endRange");
+
+    const startTimeLabel = document.getElementById("startTimeLabel");
+    const endTimeLabel = document.getElementById("endTimeLabel");
+    const chosenRange = document.getElementById("chosenRange");
+
+    const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+    // Einfache Hilfsfunktion, um Sekunden in mm:ss zu formatieren
+    function formatTime(sec) {
+      if (isNaN(sec)) return "0:00";
+      let minutes = Math.floor(sec / 60);
+      let seconds = Math.floor(sec % 60);
+      return minutes + ":" + (seconds < 10 ? "0" + seconds : seconds);
+    }
+
+    // Wenn eine Videodatei ausgewählt wird, erstelle einen Object-URL und lade das Video
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (file) {
+        const fileURL = URL.createObjectURL(file);
+        video.src = fileURL;
+        video.load();
+      }
+    });
+
+    // Wenn die Metadaten geladen sind (Videolänge etc.), setze die Slidergrenzen
+    video.addEventListener("loadedmetadata", () => {
+      startRange.max = video.duration;
+      endRange.max = video.duration;
+      startRange.value = 0;
+      endRange.value = video.duration;
+
+      updateLabels();
+    });
+
+    // Aktualisiere die Labels, wenn sich die Sliderwerte ändern
+    startRange.addEventListener("input", () => {
+      // Falls Start > End, setze End an Start
+      if (parseFloat(startRange.value) > parseFloat(endRange.value)) {
+        endRange.value = startRange.value;
+      }
+      updateLabels();
+    });
+
+    endRange.addEventListener("input", () => {
+      // Falls End < Start, setze Start an End
+      if (parseFloat(endRange.value) < parseFloat(startRange.value)) {
+        startRange.value = endRange.value;
+      }
+      updateLabels();
+    });
+
+    // Videoloop über den markierten Bereich
+    video.addEventListener("timeupdate", () => {
+      const startTime = parseFloat(startRange.value);
+      const endTime = parseFloat(endRange.value);
+
+      // Wenn wir das End-Intervall erreichen, zurück zur Startzeit springen
+      if (video.currentTime >= endTime) {
+        video.currentTime = startTime;
+      }
+    });
+
+    // Eigenen Button, um den Vollbildmodus zu toggeln
+    fullscreenBtn.addEventListener("click", () => {
+      // Prüfen, ob bereits Vollbild aktiv ist
+      if (!document.fullscreenElement) {
+        // Wenn nein, dann Video-Element in den Vollbildmodus bringen
+        video.requestFullscreen().catch(err => {
+          console.warn("Vollbildmodus konnte nicht aktiviert werden:", err);
+        });
+      } else {
+        // Falls ja, beenden wir den Vollbildmodus
+        document.exitFullscreen().catch(err => {
+          console.warn("Konnte Vollbild nicht beenden:", err);
+        });
+      }
+    });
+
+    function updateLabels() {
+      const startVal = parseFloat(startRange.value);
+      const endVal = parseFloat(endRange.value);
+
+      startTimeLabel.textContent = formatTime(startVal);
+      endTimeLabel.textContent = formatTime(endVal);
+      chosenRange.textContent = formatTime(startVal) + " – " + formatTime(endVal);
+    }
+  </script>
+</body>
+</html>
